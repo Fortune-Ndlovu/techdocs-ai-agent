@@ -1,17 +1,17 @@
 #Template files (starter)
 
-# Project Documentation
+# {{ repo_name }} Documentation
 
 Welcome to the documentation for **{{ repo_name }}**!
 
 ## Overview
 
-Provide a short description of the project here.
+Provide a brief description of what this project does.
 
-## Setup
+## Contents
 
-Explain how to set up and run the project.
-
-## Troubleshooting
-
-Provide common issues and solutions here.
+- [Getting Started](getting-started.md)
+- [Architecture](architecture.md)
+- [Deployment Guide](deployment-guide.md)
+- [Testing](testing.md)
+- [Troubleshooting](troubleshooting.md)
