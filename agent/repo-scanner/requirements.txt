@@ -1,0 +1,2 @@
+# We’ll use rich to make pretty terminal output, optional but nice.
+rich
