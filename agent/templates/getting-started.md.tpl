@@ -2,13 +2,12 @@
 
 ## Prerequisites
 
-- [ ] Install [Python 3.10+](https://www.python.org/)
-- [ ] Install [Docker](https://www.docker.com/) (optional)
+> [ ] List all software, services, or libraries required.
 
 ## Setup Instructions
 
-```bash
-git clone https://github.com/your-org/{{ repo_name }}.git
-cd {{ repo_name }}
-# Install dependencies
-# Example: pip install -r requirements.txt
+> [ ] Describe the installation and environment setup steps.
+
+## Running Locally
+
+> [ ] Provide commands or scripts to run the project locally.
