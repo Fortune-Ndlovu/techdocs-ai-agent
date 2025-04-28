@@ -10,7 +10,7 @@ if [ -z "$1" ]; then
 fi
 
 REPO_URL="$1"
-REPO_NAME=$(basename -s .git "$REPO_URL")   # example: ML
+REPO_NAME=$(basename -s .git "$REPO_URL")
 CLONE_DIR="$REPO_NAME"
 REPO_SUMMARY="repo-summary.json"
 
@@ -26,7 +26,6 @@ fi
 echo "🔎 Scanning repo..."
 python3 agent/repo-scanner/scanner.py "$CLONE_DIR" > "$REPO_SUMMARY"
 
-# 🛠️ Inject repo_url and repo_name into repo-summary.json
 echo "🧹 Patching repo-summary.json with repo_url and repo_name..."
 python3 -c "
 import json
@@ -45,4 +44,7 @@ echo "✅ Full documentation generated."
 # Commit and open PR
 bash agent/commit_and_pr.sh "$CLONE_DIR" "$REPO_NAME"
 
-echo "🎉 PR creation flow completed!"
+echo "⏳ Waiting for PR to be merged..."
+bash register_component.sh "$REPO_URL"
+
+echo "🎉 Component registration completed!"
