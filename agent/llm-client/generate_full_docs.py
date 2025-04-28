@@ -20,13 +20,16 @@ def render_template(template_path, variables):
 
 def generate_index_md_from_summary(repo_summary, docs_dir):
     extracted_docs = repo_summary.get("extracted_documents", {})
+    repo_url = repo_summary.get("repo_url", None)
+    repo_name = repo_summary.get("repo_name", "Repository")
+    
     if extracted_docs:
         # Take the first available extracted document
         _, summary = next(iter(extracted_docs.items()))
         
         # Build the index.md content
         index_content = f"""---
-title: "{repo_summary.get('repo_name', 'Repository')} Documentation"
+title: "{repo_name} Documentation"
 ---
 
 # Overview
@@ -44,8 +47,8 @@ This repository contains code and assets primarily written in:
 - Follow installation instructions if available.
 - Explore and extend the project.
 
+{"\n\n---\n\n[View source code on GitHub](" + repo_url + ")" if repo_url else ""}
 """
-
         save_doc(docs_dir, "index.md", index_content)
     else:
         print("⚠️ No extracted documents found, falling back to LLM...")
