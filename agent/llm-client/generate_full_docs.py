@@ -5,13 +5,11 @@ from prompt_builder import build_prompt_for_file
 from doc_writer import save_doc
 from jinja2 import Template
 
-# Root path = the "agent" folder where templates are located
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 TEMPLATE_PATHS = {
     "mkdocs.yaml": os.path.join(ROOT_DIR, "templates/mkdocs.yaml.tpl"),
     "catalog-info.yaml": os.path.join(ROOT_DIR, "templates/catalog-info.yaml.tpl"),
-    "index.md": os.path.join(ROOT_DIR, "templates/index.md.tpl"),
 }
 
 def render_template(template_path, variables):
@@ -20,9 +18,44 @@ def render_template(template_path, variables):
     template = Template(content)
     return template.render(**variables)
 
-def generate_all_docs(repo_summary_path, repo_dir):
-    client = LLMClient()
+def generate_index_md_from_summary(repo_summary, docs_dir):
+    extracted_docs = repo_summary.get("extracted_documents", {})
+    if extracted_docs:
+        # Take the first available extracted document
+        _, summary = next(iter(extracted_docs.items()))
+        
+        # Build the index.md content
+        index_content = f"""---
+title: "{repo_summary.get('repo_name', 'Repository')} Documentation"
+---
 
+# Overview
+
+{summary.strip()}
+
+## Project Structure
+
+This repository contains code and assets primarily written in:
+{', '.join(repo_summary.get('languages_detected', [])) or 'Unknown'}
+
+## Getting Started
+
+- Review the main notebook or scripts.
+- Follow installation instructions if available.
+- Explore and extend the project.
+
+"""
+
+        save_doc(docs_dir, "index.md", index_content)
+    else:
+        print("⚠️ No extracted documents found, falling back to LLM...")
+        # fallback to LLM-based generation
+        client = LLMClient()
+        prompt = build_prompt_for_file(repo_summary)
+        generated_content = client.generate(prompt, max_tokens=2000)
+        save_doc(docs_dir, "index.md", generated_content)
+
+def generate_all_docs(repo_summary_path, repo_dir):
     with open(repo_summary_path, "r") as f:
         repo_summary = json.load(f)
 
@@ -30,7 +63,7 @@ def generate_all_docs(repo_summary_path, repo_dir):
     docs_dir = os.path.join(repo_dir, "docs")
     os.makedirs(docs_dir, exist_ok=True)
 
-    # Ensure mkdocs.yaml
+    # Create mkdocs.yaml
     mkdocs_path = os.path.join(repo_dir, "mkdocs.yaml")
     if not os.path.exists(mkdocs_path):
         print("📄 Creating mkdocs.yaml from template...")
@@ -38,7 +71,7 @@ def generate_all_docs(repo_summary_path, repo_dir):
         with open(mkdocs_path, "w") as f:
             f.write(mkdocs_content)
 
-    # Ensure catalog-info.yaml
+    # Create catalog-info.yaml
     catalog_path = os.path.join(repo_dir, "catalog-info.yaml")
     if not os.path.exists(catalog_path):
         print("📄 Creating catalog-info.yaml from template...")
@@ -46,11 +79,9 @@ def generate_all_docs(repo_summary_path, repo_dir):
         with open(catalog_path, "w") as f:
             f.write(catalog_content)
 
-    # Generate docs/index.md using LLM
-    print(f"✍️ Generating index.md using LLM...")
-    prompt = build_prompt_for_file(repo_summary)
-    generated_content = client.generate(prompt, max_tokens=2000)
-    save_doc(docs_dir, "index.md", generated_content)
+    # Create docs/index.md
+    print(f"✍️ Creating index.md...")
+    generate_index_md_from_summary(repo_summary, docs_dir)
 
 if __name__ == "__main__":
     import sys
