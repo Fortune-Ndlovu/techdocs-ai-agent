@@ -1,50 +1,93 @@
 #!/bin/bash
-# Wait for PR to merge and register catalog-info.yaml into Developer Hub
+# Register a GitHub repo into RHDH via OpenShift OAuth Token
 
-set -e
+set -euo pipefail
 
-REPO_URL="$1"
-
-if [ -z "$REPO_URL" ]; then
+# ===========
+# INPUT
+# ===========
+REPO_URL="${1:-}"
+if [[ -z "$REPO_URL" ]]; then
   echo "❌ Error: No GitHub repo URL provided!"
+  echo "Usage: bash register_component.sh <github-repo-url>"
   exit 1
 fi
 
-REPO_OWNER=$(basename $(dirname "$REPO_URL"))
-REPO_NAME=$(basename -s .git "$REPO_URL")
-BRANCH="main" # Assuming PR is merged into main
+# ===========
+# CONFIGURATION
+# ===========
+DEVHUB_URL="https://redhat-developer-hub-rhdh-helm.apps.rosa.yt5yv-s5w6d-qyv.zn48.p3.openshiftapps.com"
+BRANCH="main"
 
-# GitHub Token (optional if repo is public; safer to use token if private)
-GITHUB_TOKEN="your-github-token-here"
+# OpenShift token for authentication (export this before running the script)
+: "${OCP_TOKEN:=}"
 
-# RHDH details
-DEVHUB_URL="https://your-devhub.example.com"    # <-- 🔥 your cluster Developer Hub URL
-RHDH_TOKEN="your-devhub-access-token-here"      # <-- 🔥 your OpenShift RHDH service token
+if [[ -z "$OCP_TOKEN" ]]; then
+  echo "❌ Error: OCP_TOKEN environment variable not set."
+  echo "Set it with: export OCP_TOKEN=sha256~your-real-token"
+  exit 1
+fi
 
-# Get the latest merged commit
-echo "🔎 Checking for latest merged commit..."
-MERGED=false
-while [ "$MERGED" = false ]; do
-  sleep 10
-  PR_STATUS=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/$REPO_OWNER/$REPO_NAME/pulls?state=closed" | jq '.[] | select(.merged_at != null) | .merged_at' | head -n1)
+# ===========
+# FUNCTIONS
+# ===========
 
-  if [ ! -z "$PR_STATUS" ]; then
-    echo "✅ PR merged at $PR_STATUS"
-    MERGED=true
-  else
-    echo "⏳ Waiting for PR to merge..."
-  fi
-done
+retry_curl() {
+  local retries=5
+  local wait=5
+  local i=0
 
-# Compose the catalog-info.yaml URL (raw)
-CATALOG_URL="https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAME/$BRANCH/catalog-info.yaml"
+  until "$@"; do
+    if (( i >= retries )); then
+      echo "❌ Command failed after $retries attempts."
+      return 1
+    fi
+    echo "⚡ Retry $((i+1))/$retries in ${wait}s..."
+    sleep "$wait"
+    ((i++))
+  done
+}
 
-# Register it into Developer Hub
+# ===========
+# MAIN
+# ===========
+
+# Detect catalog-info.yaml location
+if [[ "$REPO_URL" == *"/blob/"* ]]; then
+  RAW_URL="${REPO_URL/github.com/raw.githubusercontent.com}"
+  RAW_URL="${RAW_URL/\/blob\//\/}"
+else
+  REPO_OWNER="$(basename "$(dirname "$REPO_URL")")"
+  REPO_NAME="$(basename -s .git "$REPO_URL")"
+  RAW_URL="https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/catalog-info.yaml"
+fi
+
+echo "📄 Using catalog-info.yaml from: $RAW_URL"
+
+# Validate catalog-info.yaml exists
+if ! curl --head --silent --fail "$RAW_URL" > /dev/null; then
+  echo "❌ catalog-info.yaml not found at $RAW_URL"
+  exit 1
+fi
+echo "✅ catalog-info.yaml found!"
+
+# Register component
 echo "🚀 Registering component into Developer Hub..."
 
-curl -X POST "$DEVHUB_URL/api/catalog/register" \
-  -H "Authorization: Bearer $RHDH_TOKEN" \
+response=$(retry_curl curl -s -w "\n%{http_code}" -X POST "$DEVHUB_URL/api/catalog/register" \
+  -H "Authorization: Bearer $OCP_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"location\": {\"type\": \"url\", \"target\": \"$CATALOG_URL\"}}"
+  -d "{\"location\": {\"type\": \"url\", \"target\": \"$RAW_URL\"}}")
 
-echo "🎉 Component registered successfully: $CATALOG_URL"
+# Split body and HTTP status
+body=$(echo "$response" | sed '$d')
+status=$(echo "$response" | tail -n1)
+
+if [[ "$status" == "200" ]]; then
+  echo "🎉 Successfully registered: $RAW_URL"
+else
+  echo "❌ Failed to register component! HTTP $status"
+  echo "Response:"
+  echo "$body"
+  exit 1
+fi

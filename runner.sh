@@ -44,7 +44,5 @@ echo "✅ Full documentation generated."
 # Commit and open PR
 bash agent/commit_and_pr.sh "$CLONE_DIR" "$REPO_NAME"
 
-echo "⏳ Waiting for PR to be merged..."
-bash register_component.sh "$REPO_URL"
-
-echo "🎉 Component registration completed!"
+echo "🎉 PR creation completed!"
+echo "⚡️ Please manually register the catalog-info.yaml in Developer Hub after PR is merged."
