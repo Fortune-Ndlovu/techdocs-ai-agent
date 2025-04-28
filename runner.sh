@@ -1,7 +1,10 @@
 #!/bin/bash
 # Main orchestrator
 
-set +e  # Allow non-zero exits (don't kill immediately)
+#!/bin/bash
+# Main orchestrator
+
+set -e
 
 if [ -z "$1" ]; then
   echo "❌ Error: No GitHub repo URL provided!"
@@ -11,6 +14,7 @@ fi
 
 REPO_URL=$1
 CLONE_DIR=temp-repo
+REPO_SUMMARY=repo-summary.json
 
 echo "🔽 Cloning $REPO_URL..."
 rm -rf "$CLONE_DIR"
@@ -21,26 +25,21 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-echo "🔎 Scanning repo in $CLONE_DIR..."
+echo "🔎 Scanning repo..."
+python3 agent/repo-scanner/scanner.py "$CLONE_DIR" > "$REPO_SUMMARY"
 
-bash agent/scan_repo.sh "$CLONE_DIR"
-SCAN_RESULT=$?
+# Here we could inspect the scan result if needed
+# but let's assume we always generate fresh docs now (better)
 
-echo "🔍 Scan result code: $SCAN_RESULT"
+echo "🛠️ Generating full TechDocs using LLM..."
+python3 agent/llm-client/generate_full_docs.py "$REPO_SUMMARY" "$CLONE_DIR"
 
-if [ "$SCAN_RESULT" -eq 0 ]; then
-  echo "✅ Repo already has full TechDocs structure. Nothing to do."
-  exit 0
-elif [ "$SCAN_RESULT" -eq 1 ]; then
-  echo "🛠️ Missing TechDocs detected. Generating files..."
-  REPO_NAME=$(basename -s .git "$REPO_URL")
+echo "✅ Full documentation generated."
 
-  bash agent/generate_docs.sh "$CLONE_DIR" "$REPO_NAME"
-  bash agent/commit_and_pr.sh "$CLONE_DIR" "$REPO_NAME"
+# Commit and open PR
+REPO_NAME=$(basename -s .git "$REPO_URL")
 
-  echo "✅ PR creation flow completed!"
-  exit 0
-else
-  echo "❌ Unknown scan result: $SCAN_RESULT"
-  exit 99
-fi
+bash agent/commit_and_pr.sh "$CLONE_DIR" "$REPO_NAME"
+
+echo "🎉 PR creation flow completed!"
+# 

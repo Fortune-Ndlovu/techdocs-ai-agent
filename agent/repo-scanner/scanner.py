@@ -1,82 +1,94 @@
 import os
 import json
-from pathlib import Path
-from rich import print
 
-# Basic extension to language mapping
-EXTENSION_MAP = {
+LANGUAGE_EXTENSIONS = {
     '.py': 'Python',
+    '.go': 'Go',
     '.js': 'JavaScript',
     '.ts': 'TypeScript',
     '.java': 'Java',
-    '.go': 'Go',
+    '.cpp': 'C++',
+    '.c': 'C',
+    '.rb': 'Ruby',
+    '.rs': 'Rust',
     '.sh': 'Shell',
     '.yaml': 'YAML',
     '.yml': 'YAML',
     '.md': 'Markdown',
-    '.Dockerfile': 'Dockerfile',
-    '.rb': 'Ruby',
-    '.html': 'HTML',
-    '.css': 'CSS',
+    '.ipynb': 'Jupyter Notebook',
+    '.Dockerfile': 'Dockerfile'
 }
 
-IMPORTANT_FILES = ["README.md", "Dockerfile", "docker-compose.yml"]
+def load_text_file(filepath, max_chars=3000):
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            return f.read(max_chars)
+    except Exception:
+        return ""
 
-def classify_file(file_path):
-    ext = Path(file_path).suffix
-    return EXTENSION_MAP.get(ext, "Other")
+def extract_notebook_text(filepath, max_chars=3000):
+    try:
+        import json
+        with open(filepath, "r", encoding="utf-8") as f:
+            nb = json.load(f)
+            text = ""
+            for cell in nb.get('cells', []):
+                if cell.get('cell_type') == 'markdown':
+                    text += "".join(cell.get('source', [])) + "\n"
+            return text[:max_chars]
+    except Exception:
+        return ""
+
+def detect_language(file_path):
+    ext = os.path.splitext(file_path)[1]
+    return LANGUAGE_EXTENSIONS.get(ext, None)
 
 def scan_repo(repo_path):
-    repo_summary = {
-        "repo_name": Path(repo_path).name,
-        "languages_detected": set(),
-        "key_files": {},
-        "folder_structure": [],
-        "config_files": [],
-        "test_files": [],
-        "docs_files": []
-    }
+    languages = []
+    folder_structure = []
+    key_files_content = {}
+    extracted_documents = {}
 
     for root, dirs, files in os.walk(repo_path):
-        # Save folder structure
         for d in dirs:
-            folder_rel = os.path.relpath(os.path.join(root, d), repo_path)
-            repo_summary["folder_structure"].append(folder_rel)
+            rel_path = os.path.relpath(os.path.join(root, d), repo_path)
+            folder_structure.append(rel_path)
 
         for file in files:
-            file_rel = os.path.relpath(os.path.join(root, file), repo_path)
+            file_path = os.path.join(root, file)
+            rel_file_path = os.path.relpath(file_path, repo_path)
 
-            # Classify by extension
-            lang = classify_file(file)
-            if lang != "Other":
-                repo_summary["languages_detected"].add(lang)
+            lang = detect_language(file)
+            if lang:
+                languages.append(lang)
 
-            # Important files extraction
-            if os.path.basename(file) in IMPORTANT_FILES:
-                try:
-                    with open(os.path.join(root, file), 'r', encoding='utf-8') as f:
-                        content = f.read(5000)  # only read first 5000 chars max
-                        repo_summary["key_files"][file_rel] = content
-                except Exception as e:
-                    print(f"[red]Error reading {file}: {e}[/red]")
+            # Capture special files
+            if file in ['README.md', 'catalog-info.yaml', 'mkdocs.yaml']:
+                key_files_content[file] = load_text_file(file_path)
 
-            # Special folders
-            if file_rel.startswith('tests/'):
-                repo_summary["test_files"].append(file_rel)
-            if file_rel.startswith('docs/'):
-                repo_summary["docs_files"].append(file_rel)
-            if file.endswith(('.yaml', '.yml')) or 'docker' in file.lower():
-                repo_summary["config_files"].append(file_rel)
+            # Extract real content
+            if file.endswith(('.md', '.txt', '.py')):
+                extracted_documents[rel_file_path] = load_text_file(file_path)
+            if file.endswith('.ipynb'):
+                extracted_documents[rel_file_path] = extract_notebook_text(file_path)
 
-    repo_summary["languages_detected"] = list(repo_summary["languages_detected"])
+    languages = list(set(languages))
+
+    repo_summary = {
+        "repo_name": os.path.basename(repo_path),
+        "languages_detected": languages,
+        "key_files": key_files_content,
+        "folder_structure": folder_structure,
+        "extracted_documents": extracted_documents,
+    }
+
+    print(json.dumps(repo_summary, indent=2))
     return repo_summary
 
 if __name__ == "__main__":
     import sys
     if len(sys.argv) != 2:
-        print("[bold red]Usage:[/bold red] python scanner.py /path/to/repo")
+        print("Usage: python scanner.py /path/to/repo")
         sys.exit(1)
 
-    repo_path = sys.argv[1]
-    result = scan_repo(repo_path)
-    print(json.dumps(result, indent=2))
+    scan_repo(sys.argv[1])
