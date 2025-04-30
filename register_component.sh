@@ -8,7 +8,7 @@ set -euo pipefail
 # ===========
 REPO_URL="${1:-}"
 if [[ -z "$REPO_URL" ]]; then
-  echo "❌ Error: No GitHub repo URL provided!"
+  echo "Error: No GitHub repo URL provided!"
   echo "Usage: bash register_component.sh <github-repo-url>"
   exit 1
 fi
@@ -16,14 +16,14 @@ fi
 # ===========
 # CONFIGURATION
 # ===========
-DEVHUB_URL="https://redhat-developer-hub-rhdh-helm.apps.rosa.yt5yv-s5w6d-qyv.zn48.p3.openshiftapps.com"
+DEVHUB_URL="<add-devhub-url-here>"
 BRANCH="main"
 
 # OpenShift token for authentication (export this before running the script)
 : "${OCP_TOKEN:=}"
 
 if [[ -z "$OCP_TOKEN" ]]; then
-  echo "❌ Error: OCP_TOKEN environment variable not set."
+  echo "Error: OCP_TOKEN environment variable not set."
   echo "Set it with: export OCP_TOKEN=sha256~your-real-token"
   exit 1
 fi
@@ -39,10 +39,10 @@ retry_curl() {
 
   until "$@"; do
     if (( i >= retries )); then
-      echo "❌ Command failed after $retries attempts."
+      echo "Command failed after $retries attempts."
       return 1
     fi
-    echo "⚡ Retry $((i+1))/$retries in ${wait}s..."
+    echo "Retry $((i+1))/$retries in ${wait}s..."
     sleep "$wait"
     ((i++))
   done
@@ -62,17 +62,17 @@ else
   RAW_URL="https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${BRANCH}/catalog-info.yaml"
 fi
 
-echo "📄 Using catalog-info.yaml from: $RAW_URL"
+echo "Using catalog-info.yaml from: $RAW_URL"
 
 # Validate catalog-info.yaml exists
 if ! curl --head --silent --fail "$RAW_URL" > /dev/null; then
-  echo "❌ catalog-info.yaml not found at $RAW_URL"
+  echo "catalog-info.yaml not found at $RAW_URL"
   exit 1
 fi
-echo "✅ catalog-info.yaml found!"
+echo "catalog-info.yaml found!"
 
 # Register component
-echo "🚀 Registering component into Developer Hub..."
+echo "Registering component into Developer Hub..."
 
 response=$(retry_curl curl -s -w "\n%{http_code}" -X POST "$DEVHUB_URL/api/catalog/register" \
   -H "Authorization: Bearer $OCP_TOKEN" \
@@ -84,9 +84,9 @@ body=$(echo "$response" | sed '$d')
 status=$(echo "$response" | tail -n1)
 
 if [[ "$status" == "200" ]]; then
-  echo "🎉 Successfully registered: $RAW_URL"
+  echo "Successfully registered: $RAW_URL"
 else
-  echo "❌ Failed to register component! HTTP $status"
+  echo "Failed to register component! HTTP $status"
   echo "Response:"
   echo "$body"
   exit 1
